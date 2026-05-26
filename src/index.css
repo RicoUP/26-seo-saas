@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    body {
+        font-family: 'Inter', system-ui, sans-serif;
+        @apply bg-white text-gray-900 antialiased;
+    }
+}
+
+.hero-gradient {
+    background: linear-gradient(135deg, #7c3aed 0%, #3b82f6 50%, #1d4ed8 100%);
+}
+
+.animate-typewriter {
+    overflow: hidden;
+    white-space: nowrap;
+    border-right: 3px solid #7c3aed;
+    animation: typing 3s steps(40) forwards, blink 0.75s step-end infinite;
+}
+
+@keyframes typing {
+    from {
+        width: 0
+    }
+
+    to {
+        width: 100%
+    }
+}
+
+@keyframes blink {
+    50% {
+        border-color: transparent
+    }
+}

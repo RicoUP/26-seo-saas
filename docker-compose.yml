@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  openclaw-admin:
+    image: alpine/openclaw:latest
+    container_name: openclaw-admin
+    ports:
+      - "18789:18789"
+    environment:
+      - NODE_ENV=production
+    command: ["sh", "-c", "node openclaw.mjs gateway --allow-unconfigured --bind 0.0.0.0"]
+    restart: unless-stopped
