@@ -158,7 +158,15 @@ export default function Keywords() {
             usedFallback = true
         }
 
+        const userId = profile?.id
+        if (!userId) {
+            setError('You must be logged in to research keywords.')
+            setLoading(false)
+            return
+        }
+
         const inserts = results.map((k: any) => ({
+            user_id: userId,
             seed_keyword: seedKeyword.trim(),
             keyword: k.keyword,
             difficulty: k.difficulty,
@@ -168,13 +176,20 @@ export default function Keywords() {
         }))
 
         if (inserts.length > 0) {
-            await client.database.from('keywords').insert(inserts)
+            const { error: insertErr } = await client.database.from('keywords').insert(inserts)
+            if (insertErr) {
+                setError(insertErr.message)
+                setLoading(false)
+                return
+            }
             const period = new Date().toISOString().slice(0, 7)
-            await client.database.from('usage_logs').insert([{
+            const { error: usageErr } = await client.database.from('usage_logs').insert([{
+                user_id: userId,
                 action: 'keyword_research',
                 count: inserts.length,
                 period
             }])
+            if (usageErr) console.error('usage log insert error:', usageErr.message)
         }
 
         setSeedKeyword('')

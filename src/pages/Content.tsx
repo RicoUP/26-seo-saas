@@ -76,7 +76,15 @@ export default function Content() {
             const kw = keywords.find(k => k.id === selectedKeyword)
             if (!kw) return
 
+            const userId = profile?.id
+            if (!userId) {
+                setError('You must be logged in to generate content.')
+                setLoading(false)
+                return
+            }
+
             const { data: req } = await client.database.from('content_requests').insert([{
+                user_id: userId,
                 keyword_id: selectedKeyword,
                 website_id: selectedWebsite || null,
                 status: 'generating',
@@ -109,7 +117,12 @@ export default function Content() {
             }
 
             const period = new Date().toISOString().slice(0, 7)
-            await client.database.from('usage_logs').insert([{ action: 'content_generate', count: 1, period }])
+            await client.database.from('usage_logs').insert([{
+                user_id: userId,
+                action: 'content_generate',
+                count: 1,
+                period
+            }])
             setUsage(prev => prev + 1)
 
             if (usedFallback) {
