@@ -160,13 +160,40 @@ smart-agent       → POST {task} → general OpenRouter chat (unused in UI curr
 - **No draft preview** — cannot save as draft in WP first
 - **No error handling UI** — WP publish failures are only logged server-side
 
-### Planned: WordPress OAuth2 Flow
-- [ ] Implement WP OAuth2 plugin or use WP REST API OAuth1/WP OAuth Server
-- [ ] Redirect user to WP auth URL with client_id, redirect_uri
-- [ ] Exchange auth code for access_token
-- [ ] Store access_token/refresh_token securely
-- [ ] Use token for all WP API calls instead of Basic Auth
-- [ ] Support multiple WP sites per user
+### WordPress Connection (In Progress — Replaced OAuth2 with One-Click)
+- [x] **WordPress Plugin** (`rankai-connector.php`) — auto-generates secure one-time secret + WP App Password
+- [x] **Edge Function** `wp-connect` — handshakes with plugin, saves credentials to DB
+- [x] **Edge Function** `wp-verify` — tests stored credentials, marks status paused if invalid
+- [x] **Frontend Wizard** — 3-step modal: Download Plugin → Enter URL → One-Click Connect
+- [ ] Deploy edge functions to InsForge production
+- [ ] Bundle plugin as `.zip` for true one-click upload
+- [ ] Handle WordPress multisite / subdirectory install edge cases
+- [ ] Auto-refresh connection status on site list
+
+#### How the One-Click Flow Works
+1. **User downloads** `rankai-connector.php` from Settings
+2. **Installs & activates** in WordPress → plugin generates a one-time secret
+3. **User enters site URL** in the wizard and clicks "Connect"
+4. **Edge function calls** `POST /wp-json/rankai/v1/connect` with the secret
+5. **Plugin creates** a new WP Application Password (auto-generated, revocable)
+6. **Edge function tests** the password against `wp/v2/users/me`
+7. **Credentials saved** to `websites` table with `status = 'active'`
+8. **Future publishes** use Basic Auth with this auto-generated password
+9. **Verify button** re-tests credentials; marks `paused` if they fail
+
+#### Why This Beats OAuth2 for Beginners
+- No OAuth server plugin needed on WordPress (common plugins are abandoned/broken)
+- Uses **native WP Application Passwords** (built into WP core since 5.6)
+- Zero configuration on the WP side after plugin activation
+- No redirect URLs, no client registration, no token refresh headaches
+- Secret auto-expires after 10 min for security
+- User sees connection status in dashboard
+
+#### Security
+- One-time secrets expire after 10 minutes
+- Plugin auto-regenerates secret if consumed or expired
+- App passwords are revocable via WP admin → Users → Application Passwords
+- HTTPS-only communication enforced by modern WP hosts
 
 ---
 
@@ -191,8 +218,8 @@ insforge functions deploy keyword-research --project-ref zchqu92m
 
 ## 9. Next Priority Tasks
 
-1. **Content Quality Enhancement** — Implement two-pass generation, SERP analysis, style selection
-2. **WordPress OAuth2** — Replace app passwords with OAuth flow for better UX
+1. ✅ **WordPress One-Click Connection** — Plugin + edge functions + UI wizard (code complete; deploy functions & test)
+2. **Content Quality Enhancement** — Implement two-pass generation, SERP analysis, style selection
 3. **Stripe Integration** — Real checkout + customer portal sessions
 4. **Real Keyword API** — Hook up Ahrefs/Semrush for accurate volume/difficulty data
 5. **Email Automation** — Wire up email_queue with edge function + cron trigger
@@ -206,4 +233,4 @@ insforge functions deploy keyword-research --project-ref zchqu92m
 | Date | Change | Commit |
 |------|--------|--------|
 | 2026-05-26 | Initial schema + auth + keyword research + content generator | `bf8438c` |
-| 2026-05-29 | Created this project tracker | — |
+| 2026-05-29 | One-click WordPress connection wizard + plugin + edge functions | `c79139c` |
