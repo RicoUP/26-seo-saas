@@ -11,7 +11,7 @@ export default function Footer() {
                             <div className="w-7 h-7 bg-gradient-to-br from-brand-600 to-accent-500 rounded-lg flex items-center justify-center">
                                 <Search className="w-3.5 h-3.5 text-white" />
                             </div>
-                            <span className="font-bold text-gray-900">SEOtool.to</span>
+                            <span className="font-bold text-gray-900">SEO Tool</span>
                         </div>
                         <p className="text-sm text-gray-500">AI SEO that replaces your expensive agency — for the price of coffee.</p>
                     </div>
@@ -38,7 +38,7 @@ export default function Footer() {
                     </div>
                 </div>
                 <div className="mt-8 pt-8 border-t border-gray-200 text-center text-sm text-gray-400">
-                    &copy; 2026 SEOtool.to. All rights reserved.
+                    &copy; 2026 SEO Tool. All rights reserved.
                 </div>
             </div>
         </footer>

@@ -80,7 +80,7 @@ function WordPressWizard({ onClose, onConnected }: { onClose: () => void; onConn
                 {step === 1 && (
                     <div className="px-6 pb-6 space-y-5">
                         <div>
-                            <h4 className="font-medium text-gray-900 mb-1">Step 1: Install the SEOtool.to plugin</h4>
+                            <h4 className="font-medium text-gray-900 mb-1">Step 1: Install the SEO Tool plugin</h4>
                             <p className="text-sm text-gray-500">Download our free WordPress plugin. It handles the connection automatically—no API keys needed.</p>
                         </div>
 
@@ -177,7 +177,7 @@ function WordPressWizard({ onClose, onConnected }: { onClose: () => void; onConn
                         <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 space-y-2">
                             <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-500" /> Plugin detected on <code className="text-xs bg-white px-1.5 py-0.5 rounded border">{siteUrl}</code></p>
                             <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-500" /> Secure application password created</p>
-                            <p className="flex items-center gap-2 opacity-50"><Loader2 className="w-4 h-4" /> Saving to your SEOtool.to account…</p>
+                            <p className="flex items-center gap-2 opacity-50"><Loader2 className="w-4 h-4" /> Saving to your SEO Tool account…</p>
                         </div>
 
                         <div className="flex gap-3">
@@ -207,7 +207,7 @@ function WordPressWizard({ onClose, onConnected }: { onClose: () => void; onConn
                         </div>
                         <div>
                             <h4 className="font-semibold text-gray-900 text-lg">You're connected!</h4>
-                            <p className="text-sm text-gray-500 mt-1">WordPress is now linked to your SEOtool.to dashboard. Content will publish here automatically.</p>
+                            <p className="text-sm text-gray-500 mt-1">WordPress is now linked to your SEO Tool dashboard. Content will publish here automatically.</p>
                         </div>
                         <button
                             onClick={onClose}
@@ -395,7 +395,7 @@ export default function Settings() {
                         </div>
                         <h3 className="font-semibold text-gray-900 mb-1">No websites connected</h3>
                         <p className="text-sm text-gray-500 mb-6 max-w-xs mx-auto">
-                            Connect your WordPress site to publish content directly from SEOtool.to.
+                            Connect your WordPress site to publish content directly from SEO Tool.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-3 justify-center">
                             <button

@@ -23,7 +23,7 @@ export default function Navbar() {
                             <Search className="w-4 h-4 text-white" />
                         </div>
                         <span className="text-xl font-bold bg-gradient-to-r from-brand-700 to-accent-600 bg-clip-text text-transparent">
-                            SEOtool.to
+                            SEO Tool
                         </span>
                     </Link>
 
