@@ -45,12 +45,15 @@ export default async function (req: Request): Promise<Response> {
     let authUrl: string | null = null;
 
     try {
+        // Create a timeout controller for discovery (Deno compatible)
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
         const discoveryRes = await fetch(restApiUrl, {
             method: "GET",
             headers: { "Accept": "application/json" },
-            // Short timeout for discovery
-            signal: AbortSignal.timeout(10000),
+            signal: controller.signal,
         });
+        clearTimeout(timeout);
 
         if (discoveryRes.ok) {
             const apiData = await discoveryRes.json();

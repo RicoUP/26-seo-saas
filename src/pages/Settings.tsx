@@ -167,9 +167,10 @@ export default function Settings() {
     const [showManual, setShowManual] = useState(false)
     const [showAdvanced, setShowAdvanced] = useState<Record<string, boolean>>({})
 
-    // Handle WordPress Application Passwords callback
-    const [callbackState, setCallbackState] = useState<'idle' | 'processing' | 'success' | 'error'>('idle')
-    const [callbackError, setCallbackError] = useState('')
+    // Callback state UI
+    const [showCallbackSuccess, setShowCallbackSuccess] = useState(false)
+    const [showCallbackError, setShowCallbackError] = useState(false)
+    const [callbackErrorMsg, setCallbackErrorMsg] = useState('')
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search)
@@ -177,8 +178,9 @@ export default function Settings() {
         const isRejected = params.get('wp_rejected') === '1'
 
         if (isRejected) {
-            setCallbackState('error')
-            setCallbackError('WordPress authorization was cancelled.')
+            setCallbackErrorMsg('WordPress authorization was cancelled.')
+            setShowCallbackError(true)
+            setTimeout(() => setShowCallbackError(false), 5000)
             // Clean URL
             window.history.replaceState({}, '', window.location.pathname)
             loadData()
@@ -191,14 +193,13 @@ export default function Settings() {
             const password = params.get('password')
 
             if (!siteUrl || !userLogin || !password) {
-                setCallbackState('error')
-                setCallbackError('Missing credentials from WordPress. Please try again.')
+                setCallbackErrorMsg('Missing credentials from WordPress. Please try again.')
+                setShowCallbackError(true)
+                setTimeout(() => setShowCallbackError(false), 5000)
                 window.history.replaceState({}, '', window.location.pathname)
                 loadData()
                 return
             }
-
-            setCallbackState('processing')
 
             // Call the callback edge function to save credentials
             const saveWpCredentials = async () => {
@@ -211,14 +212,17 @@ export default function Settings() {
                         },
                     })
                     if (error || data?.error) {
-                        setCallbackState('error')
-                        setCallbackError(data?.error || error?.message || 'Failed to save WordPress credentials.')
+                        setCallbackErrorMsg(data?.error || error?.message || 'Failed to save WordPress credentials.')
+                        setShowCallbackError(true)
+                        setTimeout(() => setShowCallbackError(false), 5000)
                     } else {
-                        setCallbackState('success')
+                        setShowCallbackSuccess(true)
+                        setTimeout(() => setShowCallbackSuccess(false), 5000)
                     }
                 } catch (err: any) {
-                    setCallbackState('error')
-                    setCallbackError(err.message || 'An unexpected error occurred.')
+                    setCallbackErrorMsg(err.message || 'An unexpected error occurred.')
+                    setShowCallbackError(true)
+                    setTimeout(() => setShowCallbackError(false), 5000)
                 }
                 // Clean URL regardless of outcome
                 window.history.replaceState({}, '', window.location.pathname)
@@ -272,6 +276,20 @@ export default function Settings() {
 
     return (
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+            {/* WP Callback notifications */}
+            {showCallbackSuccess && (
+                <div className="mb-6 p-4 bg-green-50 border border-green-100 rounded-xl flex items-center gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                    <p className="text-sm text-green-800">WordPress connected successfully! Your site is ready for content publishing.</p>
+                </div>
+            )}
+            {showCallbackError && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3">
+                    <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                    <p className="text-sm text-red-800">{callbackErrorMsg}</p>
+                </div>
+            )}
+
             <h1 className="text-3xl font-bold text-gray-900 mb-10">Settings</h1>
 
             {/* Profile */}

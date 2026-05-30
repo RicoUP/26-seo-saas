@@ -32,12 +32,16 @@ export default async function (req: Request): Promise<Response> {
     let siteName = site_name || "";
 
     try {
+        // Create a timeout controller for credential verification (Deno compatible)
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
         const testRes = await fetch(`${restUrl}/wp/v2/users/me`, {
             headers: {
                 Authorization: "Basic " + btoa(`${user_login}:${password}`),
             },
-            signal: AbortSignal.timeout(15000),
+            signal: controller.signal,
         });
+        clearTimeout(timeout);
 
         if (testRes.ok) {
             verified = true;
