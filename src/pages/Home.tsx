@@ -64,15 +64,15 @@ const testimonials = [
     { name: 'Sarah M.', role: 'PlumbingPro Denver', quote: 'We went from 200 to 8,000 monthly visitors in 3 months. Best investment we ever made.', avatar: 'SM' },
     { name: 'James T.', role: 'Austin Electric', quote: "We're #1 for 'electrician Austin'. Replaced our $1,500/mo agency completely.", avatar: 'JT' },
     { name: 'Maria L.', role: 'CleanCo Chicago', quote: 'I publish 3 SEO blog posts a week without writing a single word. The traffic just keeps growing.', avatar: 'ML' },
-    { name: 'David R.', role: 'RoofRight Miami', quote: 'RankAI doubled our organic traffic in 60 days. No technical skills needed.', avatar: 'DR' },
+    { name: 'David R.', role: 'RoofRight Miami', quote: 'SEOtool.to doubled our organic traffic in 60 days. No technical skills needed.', avatar: 'DR' },
     { name: 'Lisa K.', role: 'FitLife Gym', quote: 'We now rank for 50+ local keywords. New members find us on Google every single day.', avatar: 'LK' }
 ]
 
 const faqs = [
-    { q: 'Will Google penalize AI content?', a: 'Not if it\'s high quality. RankAI generates original, well-researched content that follows Google\'s E-E-A-T guidelines. Many of our customers rank #1 with AI-generated posts.' },
-    { q: 'Do I need technical skills?', a: 'Absolutely not. If you can copy-paste a WordPress password, you can use RankAI. Everything else is automated.' },
+    { q: 'Will Google penalize AI content?', a: 'Not if it\'s high quality. SEOtool.to generates original, well-researched content that follows Google\'s E-E-A-T guidelines. Many of our customers rank #1 with AI-generated posts.' },
+    { q: 'Do I need technical skills?', a: 'Absolutely not. If you can copy-paste a WordPress password, you can use SEOtool.to. Everything else is automated.' },
     { q: 'What if I don\'t use WordPress?', a: 'You can download your content as HTML or Markdown and upload it to any CMS. WordPress publishing is just one click — everything else is a simple download.' },
-    { q: 'How is this different from other AI writers?', a: 'RankAI is built specifically for SEO. We research keywords first, then write content designed to rank — not generic blog fluff.' },
+    { q: 'How is this different from other AI writers?', a: 'SEOtool.to is built specifically for SEO. We research keywords first, then write content designed to rank — not generic blog fluff.' },
     { q: 'Is there a money-back guarantee?', a: 'Yes. 7-day money-back guarantee. No questions asked.' }
 ]
 
@@ -212,7 +212,7 @@ export default function Home() {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center mb-16">
                         <h2 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4">Real businesses, real results</h2>
-                        <p className="text-lg text-gray-500">These customers replaced expensive agencies with RankAI.</p>
+                        <p className="text-lg text-gray-500">These customers replaced expensive agencies with SEOtool.to.</p>
                     </div>
 
                     {/* Fake GSC screenshot area */}
@@ -268,7 +268,7 @@ export default function Home() {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
                     <h2 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4">Simple pricing, serious ROI</h2>
                     <p className="text-lg text-gray-500 mb-10 max-w-2xl mx-auto">
-                        Stop paying agencies $2,000+/mo. RankAI does the same work for less than your coffee budget.
+                        Stop paying agencies $2,000+/mo. SEOtool.to does the same work for less than your coffee budget.
                     </p>
                     <div className="inline-flex items-center gap-3 px-6 py-3 bg-brand-50 rounded-full border border-brand-100 mb-8">
                         <CountdownTimer />

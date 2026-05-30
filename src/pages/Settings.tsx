@@ -7,7 +7,7 @@ import {
     FileDown, Zap, ChevronDown, ChevronUp, AlertTriangle
 } from 'lucide-react'
 
-const WP_PLUGIN_URL = '/wp-plugin/rankai-connector.php'
+const WP_PLUGIN_URL = '/wp-plugin/seotoolto-connector.php'
 
 // ───────────────────────── Wizard Modal ───────────────────────
 
@@ -18,8 +18,8 @@ function WordPressWizard({ onClose, onConnected }: { onClose: () => void; onConn
     const [connecting, setConnecting] = useState(false)
     const [error, setError] = useState('')
 
-    const pluginZipUrl = `${window.location.origin}/wp-plugin/rankai-connector.zip`
-    const installInstructions = `1. Download rankai-connector.zip above
+    const pluginZipUrl = `${window.location.origin}/wp-plugin/seotoolto-connector.zip`
+    const installInstructions = `1. Download seotoolto-connector.zip above
 2. In WordPress admin, go to Plugins → Add New → Upload Plugin
 3. Choose the .zip file and click Install Now
 4. Click "Activate Plugin" after installation finishes`
@@ -80,18 +80,18 @@ function WordPressWizard({ onClose, onConnected }: { onClose: () => void; onConn
                 {step === 1 && (
                     <div className="px-6 pb-6 space-y-5">
                         <div>
-                            <h4 className="font-medium text-gray-900 mb-1">Step 1: Install the RankAI plugin</h4>
+                            <h4 className="font-medium text-gray-900 mb-1">Step 1: Install the SEOtool.to plugin</h4>
                             <p className="text-sm text-gray-500">Download our free WordPress plugin. It handles the connection automatically—no API keys needed.</p>
                         </div>
 
                         <div className="bg-brand-50 rounded-xl p-4 space-y-3">
                             <div className="flex items-center gap-3">
                                 <FileDown className="w-5 h-5 text-brand-600" />
-                                <span className="text-sm font-medium text-brand-900">rankai-connector.zip</span>
+                                <span className="text-sm font-medium text-brand-900">seotoolto-connector.zip</span>
                             </div>
                             <a
                                 href={pluginZipUrl}
-                                download="rankai-connector.zip"
+                                download="seotoolto-connector.zip"
                                 className="w-full flex items-center justify-center gap-2 py-2.5 bg-brand-600 text-white text-sm font-semibold rounded-lg hover:bg-brand-700 transition-colors"
                             >
                                 <Zap className="w-4 h-4" /> Download Plugin
@@ -177,7 +177,7 @@ function WordPressWizard({ onClose, onConnected }: { onClose: () => void; onConn
                         <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 space-y-2">
                             <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-500" /> Plugin detected on <code className="text-xs bg-white px-1.5 py-0.5 rounded border">{siteUrl}</code></p>
                             <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-500" /> Secure application password created</p>
-                            <p className="flex items-center gap-2 opacity-50"><Loader2 className="w-4 h-4" /> Saving to your RankAI account…</p>
+                            <p className="flex items-center gap-2 opacity-50"><Loader2 className="w-4 h-4" /> Saving to your SEOtool.to account…</p>
                         </div>
 
                         <div className="flex gap-3">
@@ -207,7 +207,7 @@ function WordPressWizard({ onClose, onConnected }: { onClose: () => void; onConn
                         </div>
                         <div>
                             <h4 className="font-semibold text-gray-900 text-lg">You're connected!</h4>
-                            <p className="text-sm text-gray-500 mt-1">WordPress is now linked to your RankAI dashboard. Content will publish here automatically.</p>
+                            <p className="text-sm text-gray-500 mt-1">WordPress is now linked to your SEOtool.to dashboard. Content will publish here automatically.</p>
                         </div>
                         <button
                             onClick={onClose}
@@ -395,7 +395,7 @@ export default function Settings() {
                         </div>
                         <h3 className="font-semibold text-gray-900 mb-1">No websites connected</h3>
                         <p className="text-sm text-gray-500 mb-6 max-w-xs mx-auto">
-                            Connect your WordPress site to publish content directly from RankAI.
+                            Connect your WordPress site to publish content directly from SEOtool.to.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-3 justify-center">
                             <button

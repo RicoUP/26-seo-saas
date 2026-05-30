@@ -1,4 +1,4 @@
-# RankAI — SEO SaaS Project Tracker
+# SEOtool.to — SEO SaaS Project Tracker
 
 > **Last updated:** 2026-05-29 by Rico
 > **Status:** Active development — core features functional, content quality & WP OAuth need enhancement
@@ -161,7 +161,7 @@ smart-agent       → POST {task} → general OpenRouter chat (unused in UI curr
 - **No error handling UI** — WP publish failures are only logged server-side
 
 ### WordPress Connection (In Progress — Replaced OAuth2 with One-Click)
-- [x] **WordPress Plugin** (`rankai-connector.php`) — auto-generates secure one-time secret + WP App Password
+- [x] **WordPress Plugin** (`seotoolto-connector.php`) — auto-generates secure one-time secret + WP App Password
 - [x] **Edge Function** `wp-connect` — handshakes with plugin, saves credentials to DB
 - [x] **Edge Function** `wp-verify` — tests stored credentials, marks status paused if invalid
 - [x] **Frontend Wizard** — 3-step modal: Download Plugin → Enter URL → One-Click Connect
@@ -171,10 +171,10 @@ smart-agent       → POST {task} → general OpenRouter chat (unused in UI curr
 - [ ] Auto-refresh connection status on site list
 
 #### How the One-Click Flow Works
-1. **User downloads** `rankai-connector.php` from Settings
+1. **User downloads** `seotoolto-connector.php` from Settings
 2. **Installs & activates** in WordPress → plugin generates a one-time secret
 3. **User enters site URL** in the wizard and clicks "Connect"
-4. **Edge function calls** `POST /wp-json/rankai/v1/connect` with the secret
+4. **Edge function calls** `POST /wp-json/seotoolto/v1/connect` with the secret
 5. **Plugin creates** a new WP Application Password (auto-generated, revocable)
 6. **Edge function tests** the password against `wp/v2/users/me`
 7. **Credentials saved** to `websites` table with `status = 'active'`
@@ -234,3 +234,5 @@ insforge functions deploy keyword-research --project-ref zchqu92m
 |------|--------|--------|
 | 2026-05-26 | Initial schema + auth + keyword research + content generator | `bf8438c` |
 | 2026-05-29 | One-click WordPress connection wizard + plugin + edge functions | `c79139c` |
+| 2026-05-30 | Rebranded all "RankAI" references to "SEOtool.to" across entire codebase | |
+

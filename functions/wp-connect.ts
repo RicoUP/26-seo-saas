@@ -29,7 +29,7 @@ export default async function (req: Request): Promise<Response> {
 
     try {
         // Step 1: Ask WordPress plugin to create an application password
-        const connectRes = await fetch(`${restUrl}/rankai/v1/connect`, {
+        const connectRes = await fetch(`${restUrl}/seotoolto/v1/connect`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ secret, saas_url: Deno.env.get("FRONTEND_URL") || "https://up-agent.vercel.app" }),
@@ -38,7 +38,7 @@ export default async function (req: Request): Promise<Response> {
         if (!connectRes.ok) {
             const errText = await connectRes.text();
             return new Response(JSON.stringify({
-                error: "WordPress connection failed. Make sure the RankAI Connector plugin is installed and activated.",
+                error: "WordPress connection failed. Make sure the SEOtool.to Connector plugin is installed and activated.",
                 detail: errText,
                 wp_status: connectRes.status,
             }), {
@@ -84,7 +84,7 @@ export default async function (req: Request): Promise<Response> {
 
         const { data: { user } } = await insforge.auth.getUser();
         if (!user) {
-            return new Response(JSON.stringify({ error: "Authentication required. Please log in to RankAI first." }), {
+            return new Response(JSON.stringify({ error: "Authentication required. Please log in to SEOtool.to first." }), {
                 status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
             });
         }

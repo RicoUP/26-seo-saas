@@ -1,19 +1,19 @@
 <?php
 /**
- * Plugin Name: RankAI Connector
- * Description: One-click connection to your RankAI SEO dashboard. No API keys to copy paste.
+ * Plugin Name: SEOtool.to Connector
+ * Description: One-click connection to your SEOtool.to SEO dashboard. No API keys to copy paste.
  * Version: 1.0.0
- * Author: RankAI
+ * Author: SEOtool.to
  * License: GPL-2.0+
- * Text Domain: rankai-connector
+ * Text Domain: seotoolto-connector
  */
 
 if (!defined('ABSPATH')) exit;
 
-class RankAI_Connector {
+class SEOtoolto_Connector {
     private static $instance = null;
-    private $option_name = 'rankai_connector_secret';
-    private $option_connected = 'rankai_connected';
+    private $option_name = 'seotoolto_connector_secret';
+    private $option_connected = 'seotoolto_connected';
 
     public static function get_instance() {
         if (null === self::$instance) {
@@ -27,7 +27,7 @@ class RankAI_Connector {
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_action('admin_notices', [$this, 'show_connect_notice']);
         add_action('rest_api_init', [$this, 'register_rest_routes']);
-        add_action('admin_init', [$this, 'handle_rankai_redirect']);
+        add_action('admin_init', [$this, 'handle_seotoolto_redirect']);
     }
 
     public function activate() {
@@ -46,10 +46,10 @@ class RankAI_Connector {
 
     public function add_admin_menu() {
         add_menu_page(
-            'RankAI',
-            'RankAI',
+            'SEOtool.to',
+            'SEOtool.to',
             'manage_options',
-            'rankai-connector',
+            'seotoolto-connector',
             [$this, 'render_admin_page'],
             'dashicons-admin-links',
             99
@@ -61,36 +61,36 @@ class RankAI_Connector {
         if ($connected) return;
 
         $screen = get_current_screen();
-        if (!$screen || $screen->id === 'toplevel_page_rankai-connector') return;
+        if (!$screen || $screen->id === 'toplevel_page_seotoolto-connector') return;
 
         $connect_url = $this->get_connect_url();
         echo '<div class="notice notice-info is-dismissible">';
-        echo '<p><strong>RankAI Connector is ready!</strong> ';
-        echo '<a href="' . esc_url($connect_url) . '" target="_blank" class="button button-primary" style="margin-left:8px;">Connect to RankAI</a>';
+        echo '<p><strong>SEOtool.to Connector is ready!</strong> ';
+        echo '<a href="' . esc_url($connect_url) . '" target="_blank" class="button button-primary" style="margin-left:8px;">Connect to SEOtool.to</a>';
         echo '</p></div>';
     }
 
     public function render_admin_page() {
         $connected = get_option($this->option_connected);
         $connect_url = $this->get_connect_url();
-        $disconnect_url = wp_nonce_url(admin_url('admin.php?page=rankai-connector&rankai_disconnect=1'), 'rankai_disconnect');
+        $disconnect_url = wp_nonce_url(admin_url('admin.php?page=seotoolto-connector&seotoolto_disconnect=1'), 'seotoolto_disconnect');
         ?>
         <div class="wrap">
-            <h1>RankAI Connector</h1>
+            <h1>SEOtool.to Connector</h1>
             <?php if ($connected): ?>
                 <div class="notice notice-success">
-                    <p><strong>✅ Connected!</strong> Your site is linked to RankAI. New content will publish here automatically.</p>
+                    <p><strong>✅ Connected!</strong> Your site is linked to SEOtool.to. New content will publish here automatically.</p>
                 </div>
                 <p>
-                    <a href="<?php echo esc_url($connect_url); ?>" target="_blank" class="button">Open RankAI Dashboard</a>
-                    <a href="<?php echo esc_url($disconnect_url); ?>" class="button" style="margin-left:10px;color:#b32d2e;border-color:#b32d2e;" onclick="return confirm('Disconnect this site from RankAI?');">Disconnect</a>
+                    <a href="<?php echo esc_url($connect_url); ?>" target="_blank" class="button">Open SEOtool.to Dashboard</a>
+                    <a href="<?php echo esc_url($disconnect_url); ?>" class="button" style="margin-left:10px;color:#b32d2e;border-color:#b32d2e;" onclick="return confirm('Disconnect this site from SEOtool.to?');">Disconnect</a>
                 </p>
             <?php else: ?>
                 <div class="card" style="max-width:600px;padding:20px;margin-top:20px;">
-                    <h2>Connect to RankAI</h2>
-                    <p>Click the button below to link this WordPress site to your RankAI dashboard. No API keys or passwords needed.</p>
+                    <h2>Connect to SEOtool.to</h2>
+                    <p>Click the button below to link this WordPress site to your SEOtool.to dashboard. No API keys or passwords needed.</p>
                     <a href="<?php echo esc_url($connect_url); ?>" target="_blank" class="button button-primary button-hero" style="font-size:16px;">
-                        🔗 Connect to RankAI
+                        🔗 Connect to SEOtool.to
                     </a>
                     <p style="margin-top:20px;color:#666;font-size:13px;">
                         Site URL: <code><?php echo esc_html(get_site_url()); ?></code>
@@ -108,20 +108,20 @@ class RankAI_Connector {
             $data = get_option($this->option_name);
         }
         $saas_url = 'https://zchqu92m.eu-central.insforge.app'; // Will be overridden by frontend detection
-        return 'https://rankai.app/settings?wp_connect=1'
+        return 'https://seotoolto.app/settings?wp_connect=1'
             . '&site_url=' . urlencode(get_site_url())
             . '&secret=' . urlencode($data['secret'])
             . '&site_name=' . urlencode(get_bloginfo('name'))
             . '&wp_version=' . urlencode(get_bloginfo('version'));
     }
 
-    public function handle_rankai_redirect() {
+    public function handle_seotoolto_redirect() {
         if (!is_admin() || !current_user_can('manage_options')) return;
 
         // Handle disconnect
-        if (isset($_GET['rankai_disconnect']) && wp_verify_nonce($_GET['_wpnonce'], 'rankai_disconnect')) {
+        if (isset($_GET['seotoolto_disconnect']) && wp_verify_nonce($_GET['_wpnonce'], 'seotoolto_disconnect')) {
             $this->disconnect();
-            wp_redirect(admin_url('admin.php?page=rankai-connector'));
+            wp_redirect(admin_url('admin.php?page=seotoolto-connector'));
             exit;
         }
     }
@@ -140,13 +140,13 @@ class RankAI_Connector {
     }
 
     public function register_rest_routes() {
-        register_rest_route('rankai/v1', '/connect', [
+        register_rest_route('seotoolto/v1', '/connect', [
             'methods' => 'POST',
             'callback' => [$this, 'handle_connect_request'],
             'permission_callback' => '__return_true', // We validate via secret
         ]);
 
-        register_rest_route('rankai/v1', '/disconnect', [
+        register_rest_route('seotoolto/v1', '/disconnect', [
             'methods' => 'POST',
             'callback' => [$this, 'handle_disconnect_request'],
             'permission_callback' => '__return_true',
@@ -169,7 +169,7 @@ class RankAI_Connector {
             return new WP_Error('secret_expired', 'Connection secret expired. Please refresh the page.', ['status' => 403]);
         }
 
-        // Create application password for RankAI service
+        // Create application password for SEOtool.to service
         $user_id = get_current_user_id() ?: get_users(['role' => 'administrator', 'number' => 1, 'fields' => 'ID'])[0] ?? 0;
         if (!$user_id) {
             return new WP_Error('no_user', 'No administrator user found.', ['status' => 500]);
@@ -180,10 +180,10 @@ class RankAI_Connector {
             return new WP_Error('no_app_passwords', 'WordPress Application Passwords not available. Requires WP 5.6+.', ['status' => 500]);
         }
 
-        // Revoke any existing RankAI password first
+        // Revoke any existing SEOtool.to password first
         $existing = WP_Application_Passwords::get_user_application_passwords($user_id);
         foreach ($existing as $pass) {
-            if (strpos($pass['name'], 'RankAI') === 0) {
+            if (strpos($pass['name'], 'SEOtool.to') === 0) {
                 WP_Application_Passwords::delete_application_password($user_id, $pass['uuid']);
             }
         }
@@ -192,7 +192,7 @@ class RankAI_Connector {
         $app_pass_result = WP_Application_Passwords::create_new_application_password(
             $user_id,
             [
-                'name' => 'RankAI Connector ' . wp_generate_password(4, false, false),
+                'name' => 'SEOtool.to Connector ' . wp_generate_password(4, false, false),
             ]
         );
 
@@ -235,4 +235,5 @@ class RankAI_Connector {
     }
 }
 
-RankAI_Connector::get_instance();
+SEOtoolto_Connector::get_instance();
+

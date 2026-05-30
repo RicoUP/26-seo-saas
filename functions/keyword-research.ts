@@ -35,7 +35,7 @@ export default async function (req: Request): Promise<Response> {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${apiKey}`,
                 "HTTP-Referer": "https://up-agent.insforge.app",
-                "X-Title": "RankAI Keyword Research",
+                "X-Title": "SEOtool.to Keyword Research",
             },
             body: JSON.stringify({
                 model: "openai/gpt-4o-mini",
