@@ -27,7 +27,7 @@
 | Keyword Research | ✅ Functional | OpenRouter AI generates 8-12 related keywords per seed. Fallback mock generator exists. |
 | Content Generator | ✅ Functional | OpenRouter writes 2000+ word SEO blog posts. Fallback mock generator exists. |
 | Rank Tracking (manual) | ✅ Done | Manual position logging per keyword in `keyword_rankings` table |
-| WordPress Publish | ⚠️ Partial | Uses **Application Passwords** (Basic Auth). OAuth2 flow **not yet implemented**. |
+| WordPress Publish | ✅ Functional | Native **Application Passwords** flow — one-click authorization, no plugin needed. Manual entry fallback. |
 | Dashboard Stats | ✅ Done | Keywords, content pieces, websites, avg position |
 | Usage Quotas | ✅ Done | Per-action logging in `usage_logs` table |
 | Stripe Billing | 🟡 Stub | `stripe_customer_id`, `stripe_subscription_id` in schema. Portal button is placeholder. |
@@ -72,7 +72,7 @@ smart-agent       → POST {task} → general OpenRouter chat (unused in UI curr
 
 ## 4. Known Issues & Technical Debt
 
-- **WP Auth is Basic Auth only** — OAuth2 for WordPress is planned (see section 6)
+- **WP Auth uses native Application Passwords** — one-click flow, no plugin needed (see section 7)
 - **Content is generic** — AI writes good but not *great* content. Needs SERP analysis, competitor outlines.
 - **Stripe is stubbed** — Portal button shows `alert()`, no real checkout/session.
 - **Email queue not wired** — Schema exists, no sending mechanism.
@@ -138,62 +138,84 @@ smart-agent       → POST {task} → general OpenRouter chat (unused in UI curr
 
 ---
 
-## 7. WordPress Export: How It Works
+## 7. WordPress Connection: How It Works
 
-### Current Implementation (Application Passwords)
-1. In **Settings > Websites**, user adds:
-   - Domain
-   - WordPress REST API URL (e.g., `https://example.com/wp-json`)
-   - WP Username
-   - WP Application Password (generated in WP admin: Users → Application Passwords)
-2. Stored in `websites` table as `wp_url`, `wp_username`, `wp_app_password`
-3. When content is generated with `publish_method = 'wordpress'`:
-   - Edge function POSTs to `{wp_url}/wp/v2/posts` with Basic Auth header
-   - Body: `{title, content: html, status: "publish", excerpt: meta_description}`
-   - On success, updates `content_requests.status` to `published`
+### Current Implementation (Native Application Passwords — One-Click)
+
+#### For Users (One-Click Flow)
+1. Go to **Settings > Websites > Connect WordPress**
+2. Enter your WordPress site URL (e.g., `https://example.com`)
+3. Click **Authorize WordPress** → opens WP admin in new tab
+4. Log into WordPress (if not already logged in)
+5. Click **"Approve"** on the Application Passwords screen
+6. Automatically redirected back to SEO Tool — connection is live!
+
+#### Manual Fallback
+If the one-click flow doesn't work (e.g., security plugins block REST API):
+1. In **Settings > Websites > Add Manual**
+2. Enter domain, optional niche
+3. Enter WordPress REST URL, username, and Application Password
+4. Click **Save Website**
+
+#### How to Get a Manual Application Password
+1. Log into your WordPress admin
+2. Go to **Users > Your Profile** (or Users > [username])
+3. Scroll to **Application Passwords** section
+4. Enter "SEO Tool" as the app name
+5. Click **Add New Application Password**
+6. Copy the generated password (shown once)
+
+#### Content Publishing
+When content is generated with `publish_method = 'wordpress'`:
+- Edge function POSTs to `{wp_url}/wp/v2/posts` with Basic Auth header
+- Body: `{title, content: html, status: "publish", excerpt: meta_description}`
+- On success, updates `content_requests.status` to `published`
 
 ### Known Limitations
-- **No OAuth2** — users must manually create app passwords in WP admin
 - **No media upload** — featured images cannot be pushed to WP
 - **No category/tag selection** — posts land in default category
 - **No scheduling** — publishes immediately (status always "publish")
 - **No draft preview** — cannot save as draft in WP first
 - **No error handling UI** — WP publish failures are only logged server-side
 
-### WordPress Connection (In Progress — Replaced OAuth2 with One-Click)
-- [x] **WordPress Plugin** (`seotoolto-connector.php`) — auto-generates secure one-time secret + WP App Password
-- [x] **Edge Function** `wp-connect` — handshakes with plugin, saves credentials to DB
+### WordPress Connection (Implemented — Native Application Passwords)
+- [x] **Edge Function** `wp-auth-start` — discovers WP auth endpoint, validates HTTPS, builds redirect URL
+- [x] **Edge Function** `wp-auth-callback` — captures credentials from WP redirect, verifies, saves to DB
 - [x] **Edge Function** `wp-verify` — tests stored credentials, marks status paused if invalid
-- [x] **Frontend Wizard** — 3-step modal: Download Plugin → Enter URL → One-Click Connect
+- [x] **Frontend Wizard** — 1-step modal: Enter WP URL → Authorize in new tab → Auto callback
+- [x] **Legacy Plugin** (`seotoolto-connector.php`) — kept for reference but no longer required
 - [ ] Deploy edge functions to InsForge production
-- [ ] Bundle plugin as `.zip` for true one-click upload
 - [ ] Handle WordPress multisite / subdirectory install edge cases
 - [ ] Auto-refresh connection status on site list
 
 #### How the One-Click Flow Works
-1. **User downloads** `seotoolto-connector.php` from Settings
-2. **Installs & activates** in WordPress → plugin generates a one-time secret
-3. **User enters site URL** in the wizard and clicks "Connect"
-4. **Edge function calls** `POST /wp-json/seotoolto/v1/connect` with the secret
-5. **Plugin creates** a new WP Application Password (auto-generated, revocable)
-6. **Edge function tests** the password against `wp/v2/users/me`
-7. **Credentials saved** to `websites` table with `status = 'active'`
-8. **Future publishes** use Basic Auth with this auto-generated password
-9. **Verify button** re-tests credentials; marks `paused` if they fail
+1. **User clicks "Connect WordPress"** and enters their site URL (e.g., `https://example.com`)
+2. **Edge function** discovers the WP REST API auth endpoint via `GET /wp-json`
+3. **Builds redirect URL** to WordPress `authorize-application.php` with:
+   - `app_name=SEO Tool`
+   - `success_url=https://[frontend]/settings?wp_callback=1`
+   - `reject_url=https://[frontend]/settings?wp_rejected=1`
+4. **Opens WP admin** in new tab → user enters login credentials (if needed) → clicks "Approve"
+5. **WordPress redirects back** to `?wp_callback=1&site_url=...&user_login=...&password=...`
+6. **Settings page detects** callback params on load, calls `wp-auth-callback` edge function
+7. **Edge function verifies** credentials via `GET /wp/v2/users/me` with Basic Auth
+8. **Credentials saved** to `websites` table with `status = 'active'`
+9. **Future publishes** use Basic Auth with the approved application password
+10. **Verify button** re-tests credentials; marks `paused` if they fail
 
-#### Why This Beats OAuth2 for Beginners
-- No OAuth server plugin needed on WordPress (common plugins are abandoned/broken)
-- Uses **native WP Application Passwords** (built into WP core since 5.6)
-- Zero configuration on the WP side after plugin activation
-- No redirect URLs, no client registration, no token refresh headaches
-- Secret auto-expires after 10 min for security
-- User sees connection status in dashboard
+#### Why This Beats Plugin + OAuth2
+- **No plugin installation** — uses WordPress core's native Application Passwords (WP 5.6+)
+- **No OAuth headaches** — no client registration, no redirect URL config, no token refresh
+- **One-click** — enter URL → approve in WP → done
+- **Secure** — credentials verified before storage, HTTPS enforced, password revocable in WP admin
+- **Fallback** — manual entry still available for edge cases
 
 #### Security
-- One-time secrets expire after 10 minutes
-- Plugin auto-regenerates secret if consumed or expired
+- HTTPS-only enforced (WP blocks Application Passwords on non-HTTPS sites)
+- Credentials verified via REST API before being stored in DB
 - App passwords are revocable via WP admin → Users → Application Passwords
-- HTTPS-only communication enforced by modern WP hosts
+- Callback URL params are cleaned from browser history after processing
+- No credentials stored in browser localStorage
 
 ---
 
