@@ -1,57 +1,36 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import client, { edgeFunctions } from '../lib/insforge'
 import { useAuth } from '../hooks/useAuth'
 import {
     Globe, Trash2, Plus, ExternalLink, Plug,
-    ArrowRight, CheckCircle, X, Loader2, Copy,
-    FileDown, Zap, ChevronDown, ChevronUp, AlertTriangle
+    CheckCircle, X, Loader2, ChevronDown, ChevronUp, AlertTriangle
 } from 'lucide-react'
-
-const WP_PLUGIN_URL = '/wp-plugin/seotoolto-connector.php'
 
 // ───────────────────────── Wizard Modal ───────────────────────
 
 function WordPressWizard({ onClose, onConnected }: { onClose: () => void; onConnected: () => void }) {
-    const [step, setStep] = useState(1)
-    const [copied, setCopied] = useState(false)
     const [siteUrl, setSiteUrl] = useState('')
-    const [connecting, setConnecting] = useState(false)
+    const [authorizing, setAuthorizing] = useState(false)
     const [error, setError] = useState('')
 
-    const pluginZipUrl = `${window.location.origin}/wp-plugin/seotoolto-connector.zip`
-    const installInstructions = `1. Download seotoolto-connector.zip above
-2. In WordPress admin, go to Plugins → Add New → Upload Plugin
-3. Choose the .zip file and click Install Now
-4. Click "Activate Plugin" after installation finishes`
-
-    const handleCopy = () => {
-        navigator.clipboard.writeText(installInstructions).then(() => {
-            setCopied(true)
-            setTimeout(() => setCopied(false), 2000)
-        })
-    }
-
-    const handleConnect = async () => {
+    const handleAuthorize = async () => {
         setError('')
-        setConnecting(true)
+        setAuthorizing(true)
         try {
             const url = siteUrl.trim()
-            const { data, error: fnErr } = await (edgeFunctions as any).invoke('wp-connect', {
-                body: {
-                    site_url: url,
-                    secret: 'placeholder', // Real secret handled by plugin redirect or we can skip this in v1
-                    site_name: '',
-                    wp_version: '',
-                },
+            const { data, error: fnErr } = await (edgeFunctions as any).invoke('wp-auth-start', {
+                body: { site_url: url },
             })
             if (fnErr) throw new Error(fnErr.message)
-            if (!data?.success) throw new Error(data?.error || 'Connection failed')
-            setStep(4)
-            onConnected()
+            if (data?.error) throw new Error(data.error)
+            if (!data?.redirect_url) throw new Error('No redirect URL returned')
+
+            // Open WordPress authorization in a new tab
+            window.open(data.redirect_url, '_blank')
+            setAuthorizing(false)
         } catch (err: any) {
-            setError(err.message || 'Could not connect. Make sure the plugin is active and your URL is correct.')
-        } finally {
-            setConnecting(false)
+            setError(err.message || 'Could not start WordPress authorization.')
+            setAuthorizing(false)
         }
     }
 
@@ -69,154 +48,45 @@ function WordPressWizard({ onClose, onConnected }: { onClose: () => void; onConn
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
                 </div>
 
-                {/* Progress */}
-                <div className="flex px-6 py-4 gap-2">
-                    {[1, 2, 3].map(s => (
-                        <div key={s} className={`h-1.5 flex-1 rounded-full ${s < step || s === step ? 'bg-brand-500' : 'bg-gray-200'}`} />
-                    ))}
+                <div className="px-6 py-6 space-y-5">
+                    <div>
+                        <h4 className="font-medium text-gray-900 mb-1">One-click WordPress authorization</h4>
+                        <p className="text-sm text-gray-500">Enter your WordPress site URL and we'll redirect you to approve the connection. No plugin installation needed.</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">WordPress Site URL</label>
+                        <input
+                            type="url"
+                            value={siteUrl}
+                            onChange={e => setSiteUrl(e.target.value)}
+                            placeholder="https://example.com"
+                            className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                        />
+                        <p className="text-xs text-gray-400 mt-1">Must be HTTPS (SSL required)</p>
+                    </div>
+
+                    {error && (
+                        <div className="p-3 bg-red-50 border border-red-100 rounded-lg flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                            <p className="text-xs text-red-700">{error}</p>
+                        </div>
+                    )}
+
+                    <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 space-y-2">
+                        <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-500" /> We'll open your WordPress admin</p>
+                        <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-500" /> Click "Approve" — no plugin needed</p>
+                        <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-500" /> Come back here automatically</p>
+                    </div>
+
+                    <button
+                        onClick={handleAuthorize}
+                        disabled={authorizing || !siteUrl.trim()}
+                        className="w-full py-3 bg-brand-600 text-white text-sm font-semibold rounded-xl hover:bg-brand-700 transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+                    >
+                        {authorizing ? <><Loader2 className="w-4 h-4 animate-spin" /> Opening WordPress…</> : <><Plug className="w-4 h-4" /> Authorize WordPress</>}
+                    </button>
                 </div>
-
-                {/* Step 1 – Install Plugin */}
-                {step === 1 && (
-                    <div className="px-6 pb-6 space-y-5">
-                        <div>
-                            <h4 className="font-medium text-gray-900 mb-1">Step 1: Install the SEO Tool plugin</h4>
-                            <p className="text-sm text-gray-500">Download our free WordPress plugin. It handles the connection automatically—no API keys needed.</p>
-                        </div>
-
-                        <div className="bg-brand-50 rounded-xl p-4 space-y-3">
-                            <div className="flex items-center gap-3">
-                                <FileDown className="w-5 h-5 text-brand-600" />
-                                <span className="text-sm font-medium text-brand-900">seotoolto-connector.zip</span>
-                            </div>
-                            <a
-                                href={pluginZipUrl}
-                                download="seotoolto-connector.zip"
-                                className="w-full flex items-center justify-center gap-2 py-2.5 bg-brand-600 text-white text-sm font-semibold rounded-lg hover:bg-brand-700 transition-colors"
-                            >
-                                <Zap className="w-4 h-4" /> Download Plugin
-                            </a>
-                        </div>
-
-                        <div className="bg-gray-50 rounded-xl p-4">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Install Instructions</span>
-                                <button onClick={handleCopy} className="text-xs text-brand-600 hover:text-brand-700 flex items-center gap-1">
-                                    {copied ? <CheckCircle className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                                    {copied ? 'Copied' : 'Copy'}
-                                </button>
-                            </div>
-                            <ol className="text-sm text-gray-600 space-y-2 list-decimal list-inside">
-                                <li>Log in to your WordPress admin</li>
-                                <li>Go to <strong>Plugins → Add New → Upload Plugin</strong></li>
-                                <li>Choose the downloaded <code>.zip</code> file and click <strong>Install Now</strong></li>
-                                <li>After installation, click <strong>Activate Plugin</strong></li>
-                            </ol>
-                        </div>
-
-                        <button
-                            onClick={() => setStep(2)}
-                            className="w-full py-3 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
-                        >
-                            I installed the plugin <ArrowRight className="w-4 h-4" />
-                        </button>
-                    </div>
-                )}
-
-                {/* Step 2 – Enter URL */}
-                {step === 2 && (
-                    <div className="px-6 pb-6 space-y-5">
-                        <div>
-                            <h4 className="font-medium text-gray-900 mb-1">Step 2: Enter your site URL</h4>
-                            <p className="text-sm text-gray-500">Paste the homepage URL of your WordPress site.</p>
-                        </div>
-
-                        <div>
-                            <input
-                                type="url"
-                                value={siteUrl}
-                                onChange={e => setSiteUrl(e.target.value)}
-                                placeholder="https://example.com"
-                                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
-                            />
-                        </div>
-
-                        <div className="flex gap-3">
-                            <button
-                                onClick={() => setStep(1)}
-                                className="flex-1 py-3 border border-gray-200 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors"
-                            >
-                                Back
-                            </button>
-                            <button
-                                onClick={() => setStep(3)}
-                                disabled={!siteUrl.trim()}
-                                className="flex-1 py-3 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
-                            >
-                                Next <ArrowRight className="w-4 h-4" />
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Step 3 – One-Click Connect */}
-                {step === 3 && (
-                    <div className="px-6 pb-6 space-y-5">
-                        <div>
-                            <h4 className="font-medium text-gray-900 mb-1">Step 3: Connect in one click</h4>
-                            <p className="text-sm text-gray-500">We'll verify the plugin is active and create a secure connection automatically.</p>
-                        </div>
-
-                        {error && (
-                            <div className="p-3 bg-red-50 border border-red-100 rounded-lg flex items-start gap-2">
-                                <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
-                                <p className="text-xs text-red-700">{error}</p>
-                            </div>
-                        )}
-
-                        <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 space-y-2">
-                            <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-500" /> Plugin detected on <code className="text-xs bg-white px-1.5 py-0.5 rounded border">{siteUrl}</code></p>
-                            <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-500" /> Secure application password created</p>
-                            <p className="flex items-center gap-2 opacity-50"><Loader2 className="w-4 h-4" /> Saving to your SEO Tool account…</p>
-                        </div>
-
-                        <div className="flex gap-3">
-                            <button
-                                onClick={() => setStep(2)}
-                                disabled={connecting}
-                                className="flex-1 py-3 border border-gray-200 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-40"
-                            >
-                                Back
-                            </button>
-                            <button
-                                onClick={handleConnect}
-                                disabled={connecting}
-                                className="flex-1 py-3 bg-brand-600 text-white text-sm font-semibold rounded-xl hover:bg-brand-700 transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
-                            >
-                                {connecting ? <><Loader2 className="w-4 h-4 animate-spin" /> Connecting…</> : <><Plug className="w-4 h-4" /> Connect Site</>}
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Step 4 – Success */}
-                {step === 4 && (
-                    <div className="px-6 pb-6 text-center space-y-5 py-4">
-                        <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto">
-                            <CheckCircle className="w-8 h-8 text-green-600" />
-                        </div>
-                        <div>
-                            <h4 className="font-semibold text-gray-900 text-lg">You're connected!</h4>
-                            <p className="text-sm text-gray-500 mt-1">WordPress is now linked to your SEO Tool dashboard. Content will publish here automatically.</p>
-                        </div>
-                        <button
-                            onClick={onClose}
-                            className="w-full py-3 bg-brand-600 text-white text-sm font-semibold rounded-xl hover:bg-brand-700 transition-colors"
-                        >
-                            Done
-                        </button>
-                    </div>
-                )}
             </div>
         </div>
     )
@@ -297,8 +167,67 @@ export default function Settings() {
     const [showManual, setShowManual] = useState(false)
     const [showAdvanced, setShowAdvanced] = useState<Record<string, boolean>>({})
 
+    // Handle WordPress Application Passwords callback
+    const [callbackState, setCallbackState] = useState<'idle' | 'processing' | 'success' | 'error'>('idle')
+    const [callbackError, setCallbackError] = useState('')
+
     useEffect(() => {
-        loadData()
+        const params = new URLSearchParams(window.location.search)
+        const isCallback = params.get('wp_callback') === '1'
+        const isRejected = params.get('wp_rejected') === '1'
+
+        if (isRejected) {
+            setCallbackState('error')
+            setCallbackError('WordPress authorization was cancelled.')
+            // Clean URL
+            window.history.replaceState({}, '', window.location.pathname)
+            loadData()
+            return
+        }
+
+        if (isCallback) {
+            const siteUrl = params.get('site_url')
+            const userLogin = params.get('user_login')
+            const password = params.get('password')
+
+            if (!siteUrl || !userLogin || !password) {
+                setCallbackState('error')
+                setCallbackError('Missing credentials from WordPress. Please try again.')
+                window.history.replaceState({}, '', window.location.pathname)
+                loadData()
+                return
+            }
+
+            setCallbackState('processing')
+
+            // Call the callback edge function to save credentials
+            const saveWpCredentials = async () => {
+                try {
+                    const { data, error } = await (edgeFunctions as any).invoke('wp-auth-callback', {
+                        body: {
+                            site_url: decodeURIComponent(siteUrl),
+                            user_login: decodeURIComponent(userLogin),
+                            password: decodeURIComponent(password),
+                        },
+                    })
+                    if (error || data?.error) {
+                        setCallbackState('error')
+                        setCallbackError(data?.error || error?.message || 'Failed to save WordPress credentials.')
+                    } else {
+                        setCallbackState('success')
+                    }
+                } catch (err: any) {
+                    setCallbackState('error')
+                    setCallbackError(err.message || 'An unexpected error occurred.')
+                }
+                // Clean URL regardless of outcome
+                window.history.replaceState({}, '', window.location.pathname)
+                loadData()
+            }
+            saveWpCredentials()
+        } else {
+            loadData()
+        }
     }, [])
 
     const loadData = async () => {
