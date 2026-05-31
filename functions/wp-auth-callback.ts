@@ -17,6 +17,8 @@ export default async function (req: Request): Promise<Response> {
     const { site_url, user_login, password, site_name } = body;
     const userToken = req.headers.get("Authorization")?.replace("Bearer ", "").trim();
 
+    console.log("[wp-auth-callback] Received request", { site_url, user_login: !!user_login, password: !!password, hasToken: !!userToken });
+
     if (!site_url || !user_login || !password) {
         return new Response(JSON.stringify({ error: "Missing site_url, user_login, or password" }), {
             status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -67,13 +69,10 @@ export default async function (req: Request): Promise<Response> {
     const insforge = createClient({
         baseUrl: Deno.env.get("INSFORGE_BASE_URL")!,
         anonKey: Deno.env.get("ANON_KEY")!,
+        edgeFunctionToken: userToken || undefined,
     });
 
-    if (userToken) {
-        insforge.auth.setSession({ access_token: userToken, refresh_token: "" } as any);
-    }
-
-    const { data: { user } } = await insforge.auth.getUser();
+    const { data: { user } } = await insforge.auth.getCurrentUser();
     if (!user) {
         return new Response(JSON.stringify({ error: "Authentication required. Please log in to SEO Tool first." }), {
             status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
