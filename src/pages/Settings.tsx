@@ -160,7 +160,7 @@ function ManualAddForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: (
 // ───────────────────────── Main Settings Page ───────────────────────
 
 export default function Settings() {
-    const { user } = useAuth()
+    const { user, loading: authLoading } = useAuth()
     const [profile, setProfile] = useState<any>(null)
     const [websites, setWebsites] = useState<any[]>([])
     const [showWizard, setShowWizard] = useState(false)
@@ -172,6 +172,14 @@ export default function Settings() {
     const [showCallbackError, setShowCallbackError] = useState(false)
     const [callbackErrorMsg, setCallbackErrorMsg] = useState('')
 
+    // Store WordPress callback params to process after auth is ready
+    const [pendingWpCallback, setPendingWpCallback] = useState<{
+        siteUrl: string
+        userLogin: string
+        password: string
+    } | null>(null)
+
+    // Effect 1: Detect WordPress callback/rejection on mount, store params, clean URL
     useEffect(() => {
         const params = new URLSearchParams(window.location.search)
         const isCallback = params.get('wp_callback') === '1'
@@ -181,9 +189,7 @@ export default function Settings() {
             setCallbackErrorMsg('WordPress authorization was cancelled.')
             setShowCallbackError(true)
             setTimeout(() => setShowCallbackError(false), 5000)
-            // Clean URL
             window.history.replaceState({}, '', window.location.pathname)
-            loadData()
             return
         }
 
@@ -197,42 +203,67 @@ export default function Settings() {
                 setShowCallbackError(true)
                 setTimeout(() => setShowCallbackError(false), 5000)
                 window.history.replaceState({}, '', window.location.pathname)
-                loadData()
                 return
             }
 
-            // Call the callback edge function to save credentials
-            const saveWpCredentials = async () => {
-                try {
-                    const { data, error } = await (edgeFunctions as any).invoke('wp-auth-callback', {
-                        body: {
-                            site_url: decodeURIComponent(siteUrl),
-                            user_login: decodeURIComponent(userLogin),
-                            password: decodeURIComponent(password),
-                        },
-                    })
-                    if (error || data?.error) {
-                        setCallbackErrorMsg(data?.error || error?.message || 'Failed to save WordPress credentials.')
-                        setShowCallbackError(true)
-                        setTimeout(() => setShowCallbackError(false), 5000)
-                    } else {
-                        setShowCallbackSuccess(true)
-                        setTimeout(() => setShowCallbackSuccess(false), 5000)
-                    }
-                } catch (err: any) {
-                    setCallbackErrorMsg(err.message || 'An unexpected error occurred.')
-                    setShowCallbackError(true)
-                    setTimeout(() => setShowCallbackError(false), 5000)
-                }
-                // Clean URL regardless of outcome
-                window.history.replaceState({}, '', window.location.pathname)
-                loadData()
-            }
-            saveWpCredentials()
-        } else {
-            loadData()
+            // Store for processing when auth is ready (avoids race conditions with auth restore)
+            setPendingWpCallback({
+                siteUrl: decodeURIComponent(siteUrl),
+                userLogin: decodeURIComponent(userLogin),
+                password: decodeURIComponent(password),
+            })
+            window.history.replaceState({}, '', window.location.pathname)
         }
     }, [])
+
+    // Effect 2: Process callback only when auth is fully ready
+    useEffect(() => {
+        if (!pendingWpCallback || authLoading) return
+
+        if (!user) {
+            setCallbackErrorMsg('Authentication required. Please log in and try again.')
+            setShowCallbackError(true)
+            setTimeout(() => setShowCallbackError(false), 5000)
+            setPendingWpCallback(null)
+            loadData()
+            return
+        }
+
+        const processCallback = async () => {
+            try {
+                const { data, error } = await (edgeFunctions as any).invoke('wp-auth-callback', {
+                    body: {
+                        site_url: pendingWpCallback.siteUrl,
+                        user_login: pendingWpCallback.userLogin,
+                        password: pendingWpCallback.password,
+                    },
+                })
+                if (error || data?.error) {
+                    setCallbackErrorMsg(data?.error || error?.message || 'Failed to save WordPress credentials.')
+                    setShowCallbackError(true)
+                    setTimeout(() => setShowCallbackError(false), 5000)
+                } else {
+                    setShowCallbackSuccess(true)
+                    setTimeout(() => setShowCallbackSuccess(false), 5000)
+                }
+            } catch (err: any) {
+                setCallbackErrorMsg(err.message || 'An unexpected error occurred.')
+                setShowCallbackError(true)
+                setTimeout(() => setShowCallbackError(false), 5000)
+            }
+            setPendingWpCallback(null)
+            loadData()
+        }
+
+        processCallback()
+    }, [pendingWpCallback, authLoading, user])
+
+    // Effect 3: Normal page load — fetch data once auth is ready
+    useEffect(() => {
+        if (!authLoading && !pendingWpCallback) {
+            loadData()
+        }
+    }, [authLoading, pendingWpCallback])
 
     const loadData = async () => {
         const { data: p } = await client.database.from('profiles').select('*').single()
