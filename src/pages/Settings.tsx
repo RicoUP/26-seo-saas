@@ -236,6 +236,7 @@ export default function Settings() {
                         site_url: pendingWpCallback.siteUrl,
                         user_login: pendingWpCallback.userLogin,
                         password: pendingWpCallback.password,
+                        user_id: user?.id,
                     },
                 })
                 if (error || data?.error) {

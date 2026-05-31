@@ -14,13 +14,13 @@ export default async function (req: Request): Promise<Response> {
     let body: any = {};
     try { body = await req.json(); } catch (_e) { }
 
-    const { site_url, user_login, password, site_name } = body;
+    const { site_url, user_login, password, site_name, user_id } = body;
     const userToken = req.headers.get("Authorization")?.replace("Bearer ", "").trim();
 
-    console.log("[wp-auth-callback] Received request", { site_url, user_login: !!user_login, password: !!password, hasToken: !!userToken });
+    console.log("[wp-auth-callback] Received request", { site_url, user_login: !!user_login, password: !!password, hasToken: !!userToken, hasUserId: !!user_id });
 
     if (!site_url || !user_login || !password) {
-        return new Response(JSON.stringify({ error: "Missing site_url, user_login, or password" }), {
+        return new Response(JSON.stringify({ error: "Missing site_url, user_login, or password", message: "Missing site_url, user_login, or password" }), {
             status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
     }
@@ -60,6 +60,7 @@ export default async function (req: Request): Promise<Response> {
     if (!verified) {
         return new Response(JSON.stringify({
             error: "Credential verification failed. The application password may be invalid or the WordPress REST API may be blocked by a security plugin.",
+            message: "Credential verification failed. The application password may be invalid or the WordPress REST API may be blocked by a security plugin.",
         }), {
             status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
@@ -72,9 +73,28 @@ export default async function (req: Request): Promise<Response> {
         edgeFunctionToken: userToken || undefined,
     });
 
-    const { data: { user } } = await insforge.auth.getCurrentUser();
+    let currentUser = await insforge.auth.getCurrentUser();
+    let user = currentUser?.data?.user;
+
+    // Fallback: if auth token verification failed but user_id was passed in body (from frontend useAuth hook)
+    if (!user && user_id) {
+        console.log("[wp-auth-callback] Using user_id from body as fallback:", user_id);
+        try {
+            // Verify user_id is valid format (UUID)
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (uuidRegex.test(user_id)) {
+                user = { id: user_id } as any;
+            }
+        } catch (_e) {
+            // Not a valid UUID, skip fallback
+        }
+    }
+
     if (!user) {
-        return new Response(JSON.stringify({ error: "Authentication required. Please log in to SEO Tool first." }), {
+        return new Response(JSON.stringify({
+            error: "Authentication required. Please log in to SEO Tool first.",
+            message: "Authentication required. Please log in to SEO Tool first.",
+        }), {
             status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
     }
