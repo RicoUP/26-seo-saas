@@ -25,7 +25,7 @@ export default async function (req: Request): Promise<Response> {
 
     // Normalize URL
     const baseUrl = site_url.replace(/\/$/, "");
-    const frontendUrl = Deno.env.get("FRONTEND_URL") || "https://up-agent.vercel.app";
+    const frontendUrl = Deno.env.get("FRONTEND_URL") || "https://zchqu92m.insforge.site";
 
     // Step 1: Check if HTTPS
     if (!baseUrl.startsWith("https://")) {
@@ -81,10 +81,6 @@ export default async function (req: Request): Promise<Response> {
         success_url: callbackUrl,
         reject_url: rejectUrl,
     });
-
-    // Optional: Add app_id for better key organization (UUID)
-    // Using a static app identifier for SEO Tool
-    params.append("app_id", "seo-tool-app-2026");
 
     const redirectUrl = `${authUrl}?${params.toString()}`;
 
