@@ -24,19 +24,27 @@ export default async function (req: Request): Promise<Response> {
     }
 
     const apiKey = Deno.env.get("OPENROUTER_API_KEY");
+    const baseUrl = Deno.env.get("INSFORGE_BASE_URL");
+    const anonKey = Deno.env.get("ANON_KEY");
+
     if (!apiKey) {
-        return new Response(JSON.stringify({ error: "OPENROUTER_API_KEY not configured" }), {
+        return new Response(JSON.stringify({ error: "OPENROUTER_API_KEY not configured on server. Please add it in your InsForge project settings." }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+    }
+    if (!baseUrl || !anonKey) {
+        return new Response(JSON.stringify({ error: "InsForge environment variables not configured on server." }), {
             status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
     }
 
-    const insforge = createClient({
-        baseUrl: Deno.env.get("INSFORGE_BASE_URL")!,
-        anonKey: Deno.env.get("ANON_KEY")!,
-    });
+    const insforge = createClient({ baseUrl, anonKey });
 
     try {
         // Generate SEO blog post via OpenRouter
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 60000);
+
         const openRouterRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -67,17 +75,35 @@ Make the content genuinely useful, well-structured, and designed to rank. Includ
                 ],
                 temperature: 0.6,
             }),
+            signal: controller.signal,
         });
+        clearTimeout(timeout);
 
         if (!openRouterRes.ok) {
-            const err = await openRouterRes.text();
+            const errText = await openRouterRes.text();
+            console.error("[content-generator] OpenRouter error:", openRouterRes.status, errText.slice(0, 500));
             await insforge.database.from("content_requests").update({ status: "draft" }).eq("id", requestId);
-            return new Response(JSON.stringify({ error: "AI generation failed", detail: err }), {
+            return new Response(JSON.stringify({
+                error: "AI generation failed",
+                detail: `OpenRouter returned ${openRouterRes.status}: ${errText.slice(0, 200)}`
+            }), {
                 status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" }
             });
         }
 
         const chatData = await openRouterRes.json();
+
+        if (chatData.error) {
+            console.error("[content-generator] OpenRouter API error:", chatData.error);
+            await insforge.database.from("content_requests").update({ status: "draft" }).eq("id", requestId);
+            return new Response(JSON.stringify({
+                error: "AI generation failed",
+                detail: chatData.error.message || JSON.stringify(chatData.error)
+            }), {
+                status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+        }
+
         const text = chatData.choices?.[0]?.message?.content || "{}";
 
         let result: any = {};
@@ -108,7 +134,7 @@ Make the content genuinely useful, well-structured, and designed to rank. Includ
         }).eq("id", requestId);
 
         if (updateError) {
-            console.error("DB update error:", updateError);
+            console.error("[content-generator] DB update error:", updateError);
         }
 
         // If publish_method is wordpress, try to publish
@@ -121,7 +147,7 @@ Make the content genuinely useful, well-structured, and designed to rank. Includ
             const wp = (reqRow as any).websites;
             if (wp?.wp_url && wp?.wp_username && wp?.wp_app_password) {
                 try {
-                    await fetch(`${wp.wp_url}/wp/v2/posts`, {
+                    const wpRes = await fetch(`${wp.wp_url}/wp/v2/posts`, {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
@@ -134,12 +160,17 @@ Make the content genuinely useful, well-structured, and designed to rank. Includ
                             excerpt: metaDescription,
                         }),
                     });
-                    await insforge.database.from("content_requests").update({
-                        status: "published",
-                        publish_url: `${wp.wp_url?.replace(/\/wp-json$/, "")}/${title.toLowerCase().replace(/\s+/g, "-")}`,
-                    }).eq("id", requestId);
+                    if (wpRes.ok) {
+                        const wpData = await wpRes.json();
+                        await insforge.database.from("content_requests").update({
+                            status: "published",
+                            publish_url: wpData.link || `${wp.wp_url?.replace(/\/wp-json$/, "")}/${title.toLowerCase().replace(/\s+/g, "-")}`,
+                        }).eq("id", requestId);
+                    } else {
+                        console.error("[content-generator] WP publish failed:", wpRes.status, await wpRes.text());
+                    }
                 } catch (wpErr: any) {
-                    console.error("WordPress publish error:", wpErr.message);
+                    console.error("[content-generator] WordPress publish error:", wpErr.message);
                 }
             }
         }
@@ -148,8 +179,9 @@ Make the content genuinely useful, well-structured, and designed to rank. Includ
             status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
     } catch (err: any) {
+        console.error("[content-generator] Unhandled error:", err?.message || String(err));
         await insforge.database.from("content_requests").update({ status: "draft" }).eq("id", requestId);
-        return new Response(JSON.stringify({ error: err.message }), {
+        return new Response(JSON.stringify({ error: err?.message || "Unknown server error" }), {
             status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
     }

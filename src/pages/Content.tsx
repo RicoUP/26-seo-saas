@@ -95,25 +95,34 @@ export default function Content() {
             setGeneratingId(req.id)
             await loadData()
 
-            let result: any = null
             let usedFallback = false
+            let functionError = ''
             try {
                 const res = await (client as any).functions.invoke('content-generator', {
                     body: { request_id: req.id, keyword: kw.keyword }
                 })
-                if (res.error) throw new Error(res.error.message)
+                if (res.error) {
+                    functionError = res.error.message || 'Edge function returned an error'
+                    throw new Error(functionError)
+                }
             } catch (err: any) {
-                // Fallback: generate mock content locally so the app works without deployed functions
-                result = generateMockContent(kw.keyword)
-                usedFallback = true
+                // Check if it's a deployment/network error (function not reachable)
+                const msg = err?.message || String(err)
+                if (msg.includes('Failed to send a request') || msg.includes('fetch') || msg.includes('network') || msg.includes('404') || msg.includes('502') || msg.includes('503')) {
+                    functionError = 'Content generator is not deployed or unreachable. Please deploy the edge function in your InsForge dashboard.'
+                } else {
+                    functionError = msg
+                }
+                // Do NOT fall back to mock content — show the real error so user knows what's wrong
                 await client.database.from('content_requests').update({
-                    title: result.title,
-                    meta_description: result.meta_description,
-                    content_html: result.content_html,
-                    word_count: result.word_count,
-                    status: 'ready',
+                    status: 'draft',
                     updated_at: new Date().toISOString(),
                 }).eq('id', req.id)
+                setError(functionError)
+                setLoading(false)
+                setGeneratingId(null)
+                loadData()
+                return
             }
 
             const period = new Date().toISOString().slice(0, 7)
@@ -124,10 +133,6 @@ export default function Content() {
                 period
             }])
             setUsage(prev => prev + 1)
-
-            if (usedFallback) {
-                setError('Showing demo content (edge function not deployed). Deploy the function for live AI generation.')
-            }
         } catch (err: any) {
             setError(err.message || 'Generation failed')
         } finally {
