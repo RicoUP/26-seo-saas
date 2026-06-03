@@ -1,31 +1,33 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import client from '../lib/insforge'
-import { Sparkles, Loader2, FileText, Download, Globe, AlertTriangle } from 'lucide-react'
+import { Sparkles, Loader2, FileText, Download, Globe, AlertTriangle, RefreshCw, XCircle } from 'lucide-react'
 
 const TIER_LIMITS: Record<string, number> = { starter: 10, growth: 25, pro: Infinity }
 
-function generateMockContent(keyword: string) {
-    const title = `The Complete Guide to ${keyword.charAt(0).toUpperCase() + keyword.slice(1)}`
-    const meta = `Learn everything about ${keyword}. Expert tips, strategies, and actionable advice to help you succeed in 2024.`
-    const html = `<h1>${title}</h1>
-<h2>Introduction</h2>
-<p>Welcome to our comprehensive guide on ${keyword}. Whether you're just getting started or looking to refine your strategy, this article covers everything you need to know.</p>
-<h2>Why ${keyword} Matters</h2>
-<p>Understanding ${keyword} is essential for anyone serious about growing their online presence. In today's competitive landscape, those who master this topic gain a significant edge.</p>
-<h2>Key Strategies</h2>
-<ul>
-<li>Focus on long-term value rather than quick wins</li>
-<li>Build authority through consistent, high-quality work</li>
-<li>Measure your progress with clear KPIs</li>
-<li>Adapt your approach based on data and feedback</li>
-</ul>
-<h2>Common Mistakes to Avoid</h2>
-<p>Many people rush into ${keyword} without a clear plan. Avoid these pitfalls: skipping research, ignoring analytics, and failing to update your strategy over time.</p>
-<h2>Actionable Tips</h2>
-<p>Start small, test different approaches, and double down on what works. The most successful practitioners of ${keyword} treat it as an ongoing process, not a one-time task.</p>
-<h2>Conclusion</h2>
-<p>${keyword} is a powerful area to invest in. With the right mindset and consistent effort, you can achieve remarkable results. Start implementing these strategies today.</p>`
-    return { title, meta_description: meta, content_html: html, word_count: 2200 }
+// Direct fetch to edge function — more reliable than SDK invoke for some InsForge setups
+async function invokeEdgeFunction(name: string, body: object) {
+    const baseUrl = 'https://zchqu92m.eu-central.insforge.app'
+    const anonKey = 'ik_06ed0677bd5537902ae618a8442c0db8'
+    const res = await fetch(`${baseUrl}/functions/v1/${name}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${anonKey}`,
+        },
+        body: JSON.stringify(body),
+    })
+    const text = await res.text()
+    let data: any = null
+    let error: any = null
+    try {
+        data = JSON.parse(text)
+    } catch {
+        error = { message: `HTTP ${res.status}: ${text.slice(0, 200)}` }
+    }
+    if (!res.ok && !error) {
+        error = { message: `HTTP ${res.status}: ${text.slice(0, 200)}` }
+    }
+    return { data, error, status: res.status }
 }
 
 export default function Content() {
@@ -40,6 +42,21 @@ export default function Content() {
     const [usage, setUsage] = useState(0)
     const [generatingId, setGeneratingId] = useState<string | null>(null)
     const [error, setError] = useState('')
+
+    // Poll for status updates when there are generating requests
+    useEffect(() => {
+        const hasGenerating = requests.some(r => r.status === 'generating')
+        if (!hasGenerating) return
+        const interval = setInterval(() => {
+            loadRequests()
+        }, 3000)
+        return () => clearInterval(interval)
+    }, [requests])
+
+    const loadRequests = useCallback(async () => {
+        const { data: r } = await client.database.from('content_requests').select('*').order('created_at', { ascending: false })
+        setRequests(r || [])
+    }, [])
 
     useEffect(() => {
         loadData()
@@ -95,27 +112,33 @@ export default function Content() {
             setGeneratingId(req.id)
             await loadData()
 
-            let usedFallback = false
             let functionError = ''
             try {
-                const res = await (client as any).functions.invoke('content-generator', {
-                    body: { request_id: req.id, keyword: kw.keyword }
+                const { error: invokeErr, status } = await invokeEdgeFunction('content-generator', {
+                    request_id: req.id,
+                    keyword: kw.keyword,
                 })
-                if (res.error) {
-                    functionError = res.error.message || 'Edge function returned an error'
+                if (invokeErr) {
+                    functionError = invokeErr.message || `Edge function error (HTTP ${status})`
                     throw new Error(functionError)
                 }
             } catch (err: any) {
-                // Check if it's a deployment/network error (function not reachable)
                 const msg = err?.message || String(err)
-                if (msg.includes('Failed to send a request') || msg.includes('fetch') || msg.includes('network') || msg.includes('404') || msg.includes('502') || msg.includes('503')) {
-                    functionError = 'Content generator is not deployed or unreachable. Please deploy the edge function in your InsForge dashboard.'
+                // Classify error
+                if (msg.includes('404') || msg.includes('Not Found') || msg.includes('not found')) {
+                    functionError = 'Content generator edge function is not deployed. Please deploy it in your InsForge dashboard (Functions → Deploy).'
+                } else if (msg.includes('502') || msg.includes('503') || msg.includes('504') || msg.includes('Failed to fetch') || msg.includes('fetch')) {
+                    functionError = 'Content generator is unreachable or crashed. Check the function logs in your InsForge dashboard.'
+                } else if (msg.includes('OPENROUTER_API_KEY') || msg.includes('not configured')) {
+                    functionError = 'Server is missing the OPENROUTER_API_KEY environment variable. Add it in InsForge dashboard → Settings → Environment Variables.'
                 } else {
                     functionError = msg
                 }
-                // Do NOT fall back to mock content — show the real error so user knows what's wrong
+                // Mark as error in DB so user can see it and retry
                 await client.database.from('content_requests').update({
-                    status: 'draft',
+                    status: 'error',
+                    title: 'Generation failed',
+                    content_html: `<p class="text-red-600">${functionError}</p>`,
                     updated_at: new Date().toISOString(),
                 }).eq('id', req.id)
                 setError(functionError)
@@ -140,6 +163,50 @@ export default function Content() {
             setGeneratingId(null)
             loadData()
         }
+    }
+
+    const retryRequest = async (req: any) => {
+        setError('')
+        const kw = keywords.find(k => k.id === req.keyword_id)
+        if (!kw) {
+            setError('Original keyword not found. Please generate a new post.')
+            return
+        }
+        setGeneratingId(req.id)
+        try {
+            await client.database.from('content_requests').update({
+                status: 'generating',
+                title: null,
+                content_html: null,
+                updated_at: new Date().toISOString(),
+            }).eq('id', req.id)
+            loadData()
+
+            const { error: invokeErr, status } = await invokeEdgeFunction('content-generator', {
+                request_id: req.id,
+                keyword: kw.keyword,
+            })
+            if (invokeErr) {
+                const msg = invokeErr.message || `Edge function error (HTTP ${status})`
+                await client.database.from('content_requests').update({
+                    status: 'error',
+                    title: 'Generation failed',
+                    content_html: `<p class="text-red-600">${msg}</p>`,
+                    updated_at: new Date().toISOString(),
+                }).eq('id', req.id)
+                setError(msg)
+            }
+        } catch (err: any) {
+            setError(err.message || 'Retry failed')
+        } finally {
+            setGeneratingId(null)
+            loadData()
+        }
+    }
+
+    const deleteRequest = async (id: string) => {
+        await client.database.from('content_requests').delete().eq('id', id)
+        loadData()
     }
 
     const downloadHTML = (item: any) => {
@@ -279,18 +346,34 @@ export default function Content() {
                                         </div>
                                     )}
 
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
                                         {r.status === 'ready' && (
-                                            <>
-                                                <button
-                                                    onClick={() => downloadHTML(r)}
-                                                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5"
-                                                >
-                                                    <Download className="w-4 h-4" /> Download
-                                                </button>
-                                            </>
+                                            <button
+                                                onClick={() => downloadHTML(r)}
+                                                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5"
+                                            >
+                                                <Download className="w-4 h-4" /> Download
+                                            </button>
                                         )}
-                                        {generatingId === r.id && (
+                                        {r.status === 'error' && (
+                                            <button
+                                                onClick={() => retryRequest(r)}
+                                                disabled={generatingId === r.id}
+                                                className="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                                            >
+                                                {generatingId === r.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                                {generatingId === r.id ? 'Retrying...' : 'Retry'}
+                                            </button>
+                                        )}
+                                        {(r.status === 'error' || r.status === 'draft') && (
+                                            <button
+                                                onClick={() => deleteRequest(r.id)}
+                                                className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-700 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5"
+                                            >
+                                                <XCircle className="w-4 h-4" /> Delete
+                                            </button>
+                                        )}
+                                        {r.status === 'generating' && generatingId !== r.id && (
                                             <span className="text-sm text-amber-600 flex items-center gap-1.5">
                                                 <Loader2 className="w-4 h-4 animate-spin" /> AI is writing...
                                             </span>
