@@ -28,16 +28,19 @@ export default async function (req: Request): Promise<Response> {
     const baseUrl = site_url.replace(/\/$/, "");
     const restUrl = baseUrl.includes("/wp-json") ? baseUrl : `${baseUrl}/wp-json`;
 
-    // Step 1: Verify credentials immediately by testing a REST API call
+    // Step 1: Try to verify credentials and fetch site name via the REST API
+    // NOTE: We save credentials even if the REST API test fails, because security plugins,
+    // rate-limiting, or non-standard REST API paths can block server-to-server requests
+    // while the credentials are still valid for browser-side publishing.
     let verified = false;
-    let wpVersion = "";
     let siteName = site_name || "";
 
     try {
-        // Create a timeout controller for credential verification (Deno compatible)
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 15000);
-        const testRes = await fetch(`${restUrl}/wp/v2/users/me`, {
+        const testUrl = `${restUrl}/wp/v2/users/me`;
+        console.log("[wp-auth-callback] Testing credentials at:", testUrl);
+        const testRes = await fetch(testUrl, {
             headers: {
                 Authorization: "Basic " + btoa(`${user_login}:${password}`),
             },
@@ -45,26 +48,23 @@ export default async function (req: Request): Promise<Response> {
         });
         clearTimeout(timeout);
 
+        console.log("[wp-auth-callback] Test response status:", testRes.status);
         if (testRes.ok) {
             verified = true;
             const userData = await testRes.json();
-            // Extract site name from user data if available
+            console.log("[wp-auth-callback] Credentials verified. User:", userData.name || userData.slug || "unknown");
             if (!siteName) {
                 siteName = userData.name || "";
             }
+        } else {
+            const body = await testRes.text();
+            console.log("[wp-auth-callback] Test failed, body snippet:", body.slice(0, 200));
         }
-    } catch (_e) {
-        // Verification failed
+    } catch (e: any) {
+        console.error("[wp-auth-callback] Verification exception:", e?.message || String(e));
     }
-
-    if (!verified) {
-        return new Response(JSON.stringify({
-            error: "Credential verification failed. The application password may be invalid or the WordPress REST API may be blocked by a security plugin.",
-            message: "Credential verification failed. The application password may be invalid or the WordPress REST API may be blocked by a security plugin.",
-        }), {
-            status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-    }
+    // Do NOT return here even if !verified — save credentials anyway and let wp-verify
+    // catch issues later when the user actually publishes.
 
     // Step 2: Save to database (if user token is provided, we link to that user)
     const insforge = createClient({
