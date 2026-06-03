@@ -30,6 +30,81 @@ async function invokeEdgeFunction(name: string, body: object) {
     return { data, error, status: res.status }
 }
 
+// Client-side fallback: call OpenRouter directly from the browser
+async function generateContentClientSide(keyword: string): Promise<{ title: string; meta_description: string; content_html: string; word_count: number } | null> {
+    const apiKey = (import.meta as any).env?.VITE_OPENROUTER_API_KEY
+    if (!apiKey) return null
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 45000)
+
+    try {
+        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${apiKey}`,
+                'HTTP-Referer': window.location.origin,
+                'X-Title': 'SEO Tool Content Generator',
+            },
+            body: JSON.stringify({
+                model: 'openai/gpt-4o-mini',
+                messages: [
+                    {
+                        role: 'system',
+                        content: `You are an expert SEO blog writer. Write a complete, original 1200-1500 word SEO blog post targeting the given keyword.
+
+Return a JSON object with exactly these fields:
+- title: SEO-optimized title under 60 characters
+- meta_description: compelling meta description under 160 characters
+- content_html: full blog post as clean HTML string with <h1>, <h2>, <p>, <ul>, <li> tags. Do NOT use markdown.
+- word_count: integer word count
+
+Make the content genuinely useful, well-structured, and designed to rank. Include a table of contents, key takeaways, and a conclusion. Keep it concise but comprehensive — aim for 1200-1500 words to ensure fast generation.`,
+                    },
+                    {
+                        role: 'user',
+                        content: `Write an SEO blog post targeting the keyword: "${keyword}"`,
+                    },
+                ],
+                max_tokens: 4000,
+                temperature: 0.6,
+            }),
+            signal: controller.signal,
+        })
+        clearTimeout(timeout)
+
+        if (!res.ok) {
+            console.error('[client] OpenRouter error:', res.status, await res.text().catch(() => ''))
+            return null
+        }
+
+        const chatData = await res.json()
+        const text = chatData.choices?.[0]?.message?.content || '{}'
+
+        let result: any = {}
+        try {
+            const cleaned = text.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim()
+            result = JSON.parse(cleaned)
+        } catch {
+            const match = text.match(/\{[\s\S]*\}/)
+            if (match) {
+                try { result = JSON.parse(match[0]) } catch { /* ignore */ }
+            }
+        }
+
+        return {
+            title: result.title || `${keyword.charAt(0).toUpperCase() + keyword.slice(1)} — Complete Guide`,
+            meta_description: result.meta_description || '',
+            content_html: result.content_html || `<p>${text}</p>`,
+            word_count: result.word_count || result.content_html?.split(/\s+/)?.length || 1200,
+        }
+    } catch (err: any) {
+        console.error('[client] Direct generation error:', err?.message || String(err))
+        return null
+    }
+}
+
 export default function Content() {
     const [profile, setProfile] = useState<any>(null)
     const [keywords, setKeywords] = useState<any[]>([])
@@ -113,12 +188,15 @@ export default function Content() {
             await loadData()
 
             let functionError = ''
+            let edgeSuccess = false
             try {
                 const { error: invokeErr, status } = await invokeEdgeFunction('content-generator', {
                     request_id: req.id,
                     keyword: kw.keyword,
                 })
-                if (invokeErr) {
+                if (!invokeErr) {
+                    edgeSuccess = true
+                } else {
                     functionError = invokeErr.message || `Edge function error (HTTP ${status})`
                     throw new Error(functionError)
                 }
@@ -126,26 +204,44 @@ export default function Content() {
                 const msg = err?.message || String(err)
                 // Classify error
                 if (msg.includes('404') || msg.includes('Not Found') || msg.includes('not found')) {
-                    functionError = 'Content generator edge function is not deployed. Please deploy it in your InsForge dashboard (Functions → Deploy).'
+                    functionError = 'Edge function not deployed. Trying browser-side generation...'
                 } else if (msg.includes('502') || msg.includes('503') || msg.includes('504') || msg.includes('Failed to fetch') || msg.includes('fetch')) {
-                    functionError = 'Content generator is unreachable or crashed. Check the function logs in your InsForge dashboard.'
+                    functionError = 'Edge function unreachable. Trying browser-side generation...'
                 } else if (msg.includes('OPENROUTER_API_KEY') || msg.includes('not configured')) {
-                    functionError = 'Server is missing the OPENROUTER_API_KEY environment variable. Add it in InsForge dashboard → Settings → Environment Variables.'
+                    functionError = 'Server missing API key. Trying browser-side generation...'
                 } else {
                     functionError = msg
                 }
-                // Mark as error in DB so user can see it and retry
-                await client.database.from('content_requests').update({
-                    status: 'error',
-                    title: 'Generation failed',
-                    content_html: `<p class="text-red-600">${functionError}</p>`,
-                    updated_at: new Date().toISOString(),
-                }).eq('id', req.id)
-                setError(functionError)
-                setLoading(false)
-                setGeneratingId(null)
-                loadData()
-                return
+                console.warn('[Content] Edge function failed, trying client-side fallback:', msg)
+            }
+
+            // If edge function failed, try client-side fallback
+            if (!edgeSuccess) {
+                const fallback = await generateContentClientSide(kw.keyword)
+                if (fallback) {
+                    await client.database.from('content_requests').update({
+                        title: fallback.title,
+                        meta_description: fallback.meta_description,
+                        content_html: fallback.content_html,
+                        word_count: fallback.word_count,
+                        status: 'ready',
+                        updated_at: new Date().toISOString(),
+                    }).eq('id', req.id)
+                    setError('Generated via browser fallback. Deploy the edge function for server-side generation.')
+                } else {
+                    // Client-side also failed — show real error
+                    await client.database.from('content_requests').update({
+                        status: 'error',
+                        title: 'Generation failed',
+                        content_html: `<p class="text-red-600">${functionError}</p>`,
+                        updated_at: new Date().toISOString(),
+                    }).eq('id', req.id)
+                    setError(functionError)
+                    setLoading(false)
+                    setGeneratingId(null)
+                    loadData()
+                    return
+                }
             }
 
             const period = new Date().toISOString().slice(0, 7)
@@ -182,19 +278,55 @@ export default function Content() {
             }).eq('id', req.id)
             loadData()
 
-            const { error: invokeErr, status } = await invokeEdgeFunction('content-generator', {
-                request_id: req.id,
-                keyword: kw.keyword,
-            })
-            if (invokeErr) {
-                const msg = invokeErr.message || `Edge function error (HTTP ${status})`
-                await client.database.from('content_requests').update({
-                    status: 'error',
-                    title: 'Generation failed',
-                    content_html: `<p class="text-red-600">${msg}</p>`,
-                    updated_at: new Date().toISOString(),
-                }).eq('id', req.id)
-                setError(msg)
+            let edgeSuccess = false
+            let functionError = ''
+            try {
+                const { error: invokeErr, status } = await invokeEdgeFunction('content-generator', {
+                    request_id: req.id,
+                    keyword: kw.keyword,
+                })
+                if (!invokeErr) {
+                    edgeSuccess = true
+                } else {
+                    functionError = invokeErr.message || `Edge function error (HTTP ${status})`
+                    throw new Error(functionError)
+                }
+            } catch (err: any) {
+                const msg = err?.message || String(err)
+                if (msg.includes('404') || msg.includes('Not Found') || msg.includes('not found')) {
+                    functionError = 'Edge function not deployed. Trying browser-side generation...'
+                } else if (msg.includes('502') || msg.includes('503') || msg.includes('504') || msg.includes('Failed to fetch') || msg.includes('fetch')) {
+                    functionError = 'Edge function unreachable. Trying browser-side generation...'
+                } else if (msg.includes('OPENROUTER_API_KEY') || msg.includes('not configured')) {
+                    functionError = 'Server missing API key. Trying browser-side generation...'
+                } else {
+                    functionError = msg
+                }
+                console.warn('[Content] Retry edge function failed, trying client-side fallback:', msg)
+            }
+
+            // If edge function failed, try client-side fallback
+            if (!edgeSuccess) {
+                const fallback = await generateContentClientSide(kw.keyword)
+                if (fallback) {
+                    await client.database.from('content_requests').update({
+                        title: fallback.title,
+                        meta_description: fallback.meta_description,
+                        content_html: fallback.content_html,
+                        word_count: fallback.word_count,
+                        status: 'ready',
+                        updated_at: new Date().toISOString(),
+                    }).eq('id', req.id)
+                    setError('Generated via browser fallback. Deploy the edge function for server-side generation.')
+                } else {
+                    await client.database.from('content_requests').update({
+                        status: 'error',
+                        title: 'Generation failed',
+                        content_html: `<p class="text-red-600">${functionError}</p>`,
+                        updated_at: new Date().toISOString(),
+                    }).eq('id', req.id)
+                    setError(functionError)
+                }
             }
         } catch (err: any) {
             setError(err.message || 'Retry failed')

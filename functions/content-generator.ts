@@ -58,7 +58,7 @@ export default async function (req: Request): Promise<Response> {
                 messages: [
                     {
                         role: "system",
-                        content: `You are an expert SEO blog writer. Write a complete, original 2000+ word SEO blog post targeting the given keyword.
+                        content: `You are an expert SEO blog writer. Write a complete, original 1200-1500 word SEO blog post targeting the given keyword.
 
 Return a JSON object with exactly these fields:
 - title: SEO-optimized title under 60 characters
@@ -66,13 +66,14 @@ Return a JSON object with exactly these fields:
 - content_html: full blog post as clean HTML string with <h1>, <h2>, <p>, <ul>, <li> tags. Do NOT use markdown.
 - word_count: integer word count
 
-Make the content genuinely useful, well-structured, and designed to rank. Include a table of contents, key takeaways, and a conclusion.`,
+Make the content genuinely useful, well-structured, and designed to rank. Include a table of contents, key takeaways, and a conclusion. Keep it concise but comprehensive — aim for 1200-1500 words to ensure fast generation.`,
                     },
                     {
                         role: "user",
                         content: `Write an SEO blog post targeting the keyword: "${keyword}"`,
                     },
                 ],
+                max_tokens: 4000,
                 temperature: 0.6,
             }),
             signal: controller.signal,
